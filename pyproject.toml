@@ -1,6 +1,6 @@
 [project]
 name = "kenobi-c2s"
-version = "3.5.0"
+version = "3.6.0"
 description = "POC scaffold mirroring kenobi-c2s for release-please evaluation. Real source: github.com/crowdbotics/kenobi-c2s"
 requires-python = ">=3.12"
 
