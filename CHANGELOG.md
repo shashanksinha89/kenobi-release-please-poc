@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/1.23.0...2.0.0) (2026-05-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **api:** /api/v1/* removed. Clients must migrate to /api/v2/*.
+
+### Features
+
+* **api:** Replace v1 endpoint with v2 contract ([c4952db](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/c4952dbd62b4ac7520bb0d1db5e057a49814c07d))
+
 ## [1.23.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/1.22.0...1.23.0) (2026-05-07)
 
 
