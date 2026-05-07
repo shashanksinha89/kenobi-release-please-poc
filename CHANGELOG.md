@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.5.0...3.6.0) (2026-05-07)
+
+
+### Features
+
+* **cache:** Add cache stub for upcoming retrieval layer ([20f5458](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/20f5458c51005c70401ea556affcfab07635db44))
+
 ## [3.5.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/2.0.0...3.5.0) (2026-05-07)
 
 
