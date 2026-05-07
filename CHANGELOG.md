@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/2.0.0...3.5.0) (2026-05-07)
+
+
+### Documentation
+
+* Add quick docs note for release demo ([c9e3058](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/c9e30583427bf62da69bc458caa30d5f91cde8e3))
+
 ## [2.0.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/1.23.0...2.0.0) (2026-05-07)
 
 
