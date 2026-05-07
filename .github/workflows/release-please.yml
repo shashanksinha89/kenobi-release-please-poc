@@ -1,5 +1,14 @@
 name: release-please
 
+# Triggered on every push to main. Two outcomes:
+#   1. release-please job opens/updates the long-lived Release PR (no tag yet).
+#   2. When a Release PR gets merged, release-please cuts the tag + GitHub
+#      release in-job, and the build-versioned-image job fires via needs:.
+#
+# Auto-deploy to dev is intentionally NOT here — it lives in
+# build-deploy-dev.yml, which runs in parallel on the same push event.
+# Reason: dev should always reflect main, regardless of whether main
+# happens to have qualifying commits for a release bump.
 on:
   push:
     branches: [main]
@@ -19,6 +28,7 @@ jobs:
       major: ${{ steps.rp.outputs.major }}
       minor: ${{ steps.rp.outputs.minor }}
       patch: ${{ steps.rp.outputs.patch }}
+      prerelease: ${{ steps.rp.outputs.prerelease }}
     steps:
       - uses: googleapis/release-please-action@v4
         id: rp
@@ -26,19 +36,28 @@ jobs:
           config-file: release-please-config.json
           manifest-file: release-please-manifest.json
 
-  build:
+  # Replaces azure-build-on-tag.yml — build the versioned image when
+  # release-please cuts a new tag. No deploy here; promotion to qa/prod
+  # is handled by promote.yml on manual dispatch.
+  build-versioned-image:
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Demo build job
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - name: Build versioned image (stub)
         run: |
-          echo "Release ${{ needs.release-please.outputs.tag_name }} created"
+          echo "🏷️  Cut tag: ${{ needs.release-please.outputs.tag_name }}"
           echo "Version: ${{ needs.release-please.outputs.version }}"
-          echo "Bumped components: major=${{ needs.release-please.outputs.major }} minor=${{ needs.release-please.outputs.minor }} patch=${{ needs.release-please.outputs.patch }}"
+          echo "Components: major=${{ needs.release-please.outputs.major }} minor=${{ needs.release-please.outputs.minor }} patch=${{ needs.release-please.outputs.patch }}"
+          echo "Prerelease: ${{ needs.release-please.outputs.prerelease }}"
           echo ""
-          echo "In real kenobi-c2s, this is where:"
-          echo "  - docker build + push to ACR (tagged with \${{ needs.release-please.outputs.tag_name }})"
-          echo "  - helm package + push"
-          echo "  - deploy promotion would run."
+          echo "[stub] In real kenobi-c2s this step would:"
+          echo "  - docker build . -t cbcoreacrshared.azurecr.io/kenobi-c2s:${{ needs.release-please.outputs.tag_name }}"
+          echo "  - docker push (also pushes tenant image via Dockerfile.tenant)"
+          echo "  - resolve digest, surface as image_ref output"
+          echo ""
+          echo "Deployment to qa/production happens via the promote.yml workflow"
+          echo "(manual dispatch with image_tag=${{ needs.release-please.outputs.tag_name }})"

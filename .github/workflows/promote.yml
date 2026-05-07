@@ -1,0 +1,102 @@
+name: promote
+
+# Mirrors kenobi-c2s' azure-build-promote.yml. Manual dispatch — pick a
+# tag (must be one release-please cut) and a target environment.
+#
+# Differences from the kenobi-c2s version (intentional):
+#   - Bare semver (1.2.3, 1.2.3-rc.1) — no v prefix. release-please was
+#     configured with include-v-in-tag: false, so tags emitted by it
+#     are bare. The semver regex below reflects that.
+#   - The temporary semver-shape guard from PR #1461 in real kenobi-c2s
+#     is no longer "temporary" — release-please can only emit valid
+#     semver, so the regex acts as belt-and-suspenders against someone
+#     pushing a manual non-semver tag.
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (e.g., 1.2.3 or 1.2.3-rc.1) — must already exist as a git tag.'
+        required: true
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - qa
+          - production
+      dry_run:
+        description: 'Dry run only'
+        required: false
+        default: false
+        type: boolean
+
+# Queue per-environment promotions rather than cancelling, same as real
+# kenobi-c2s. Cancelling mid-helm-upgrade leaves the release broken.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Bare-semver shape — same regex as real kenobi-c2s but anchored
+      # on the bare digit form, not v-prefixed.
+      - name: Validate semver shape
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_TAG" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::image_tag must be valid bare semver (1.2.3 or 1.2.3-rc.1), got: $IMAGE_TAG"
+            exit 1
+          fi
+          echo "✓ semver shape: $IMAGE_TAG"
+
+      - name: Verify git tag exists
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if ! git rev-parse "refs/tags/$IMAGE_TAG" >/dev/null 2>&1; then
+            echo "::error::Git tag $IMAGE_TAG does not exist on origin. Cut and push the tag first (or merge a Release PR)."
+            exit 1
+          fi
+          echo "✓ tag exists: $IMAGE_TAG"
+
+      # Same prerelease-to-prod block as kenobi-c2s. Anything containing
+      # a hyphen in the version body is a prerelease per semver.
+      - name: Block prerelease promotion to production
+        if: ${{ github.event.inputs.environment == 'production' }}
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$IMAGE_TAG" == *-* ]]; then
+            echo "::error::Refusing to promote prerelease tag $IMAGE_TAG to production. Cut a stable release first."
+            exit 1
+          fi
+          echo "✓ stable tag — prod promotion allowed"
+
+      - name: Deploy to ${{ github.event.inputs.environment }} (stub)
+        run: |
+          echo "[stub] Resolving digest for cbcoreacrshared.azurecr.io/kenobi-c2s:${{ github.event.inputs.image_tag }}"
+          echo "[stub] helm upgrade kenobi-c2s azure/helm-chart/kenobi-c2s/deployment-app/ \\"
+          echo "          --namespace kenobi-c2s \\"
+          echo "          --set image.tag=${{ github.event.inputs.image_tag }}@<digest> \\"
+          echo "          -f azure/helm-chart/kenobi-c2s/deployment-app/values-${{ github.event.inputs.environment }}.yaml"
+          if [[ "${{ github.event.inputs.dry_run }}" == "true" ]]; then
+            echo "[stub] (dry-run flag set — would have appended --dry-run)"
+          fi
+          echo ""
+          echo "✓ ${{ github.event.inputs.environment }} now running ${{ github.event.inputs.image_tag }}"
