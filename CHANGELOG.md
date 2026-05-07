@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.0-rc.1](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.6.0...3.7.0-rc.1) (2026-05-07)
+
+
+### Documentation
+
+* Trigger prerelease via Release-As footer ([ff61439](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/ff614394f237d4839d0c0cd6d817f7810ede14ce))
+
 ## [3.6.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.5.0...3.6.0) (2026-05-07)
 
 
