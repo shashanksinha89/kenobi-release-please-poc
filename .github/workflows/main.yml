@@ -1,0 +1,106 @@
+name: main
+
+# Single workflow for "things that happen on every main push":
+#   - release-please:        manage the long-lived Release PR; cut tag on merge
+#   - build-versioned-image: build versioned image (only on Release PR merge)
+#   - build-deploy-dev:      build sha-tagged image + roll dev (always, parallel
+#                            with release-please)
+#
+# Per-job permissions and concurrency preserve least-privilege and per-flow
+# queueing semantics. build-deploy-dev intentionally has no `needs:` clause —
+# dev rollouts are not blocked by release-please failures.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Note: NO workflow-level permissions or concurrency. Each job sets its own.
+# This is required because:
+#   - release-please needs `pull-requests: write` to create/update the Release PR
+#   - build-deploy-dev only needs `packages: write` (least privilege)
+#   - release-please should be single-flight (`cancel-in-progress: false`)
+#   - build-deploy-dev should queue per-ref (don't cancel mid-helm-upgrade)
+
+jobs:
+  # Manages the Release PR. On every main push: open/update the PR if there
+  # are qualifying commits, do nothing otherwise. On Release PR merge: cut
+  # the tag + GitHub release in this same job step.
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    concurrency:
+      group: release-please-${{ github.ref }}
+      cancel-in-progress: false
+    outputs:
+      release_created: ${{ steps.rp.outputs.release_created }}
+      tag_name: ${{ steps.rp.outputs.tag_name }}
+      version: ${{ steps.rp.outputs.version }}
+      major: ${{ steps.rp.outputs.major }}
+      minor: ${{ steps.rp.outputs.minor }}
+      patch: ${{ steps.rp.outputs.patch }}
+      prerelease: ${{ steps.rp.outputs.prerelease }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          config-file: release-please-config.json
+          manifest-file: release-please-manifest.json
+
+  # Replaces azure-build-on-tag.yml — fires only when release-please cut a
+  # tag in the same workflow run. Builds the versioned image (and would
+  # build the tenant image in real kenobi-c2s).
+  build-versioned-image:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - name: Build versioned image (stub)
+        run: |
+          echo "🏷️  Cut tag: ${{ needs.release-please.outputs.tag_name }}"
+          echo "Version: ${{ needs.release-please.outputs.version }}"
+          echo "Components: major=${{ needs.release-please.outputs.major }} minor=${{ needs.release-please.outputs.minor }} patch=${{ needs.release-please.outputs.patch }}"
+          echo "Prerelease: ${{ needs.release-please.outputs.prerelease }}"
+          echo ""
+          echo "[stub] In real kenobi-c2s this step would:"
+          echo "  - docker build . -t cbcoreacrshared.azurecr.io/kenobi-c2s:${{ needs.release-please.outputs.tag_name }}"
+          echo "  - docker push (also tenant image via Dockerfile.tenant)"
+          echo "  - resolve digest, surface as image_ref output"
+          echo ""
+          echo "Promotion to qa/production happens via promote.yml on manual dispatch."
+
+  # Mirrors kenobi-c2s' azure-build-deploy-dev.yml. Builds sha-tagged image
+  # and rolls dev on every main push. Runs in parallel with release-please —
+  # NO needs: clause, so dev rollouts are not gated on release-please success.
+  build-deploy-dev:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: build-deploy-dev-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - id: vars
+        run: echo "sha7=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+      - name: Build sha-tagged image (stub)
+        run: |
+          echo "[stub] docker build -t cbcoreacrshared.azurecr.io/kenobi-c2s:sha-${{ steps.vars.outputs.sha7 }} ."
+          echo "[stub] docker tag ... :main"
+          echo "[stub] docker push ..."
+      - name: Deploy to dev (stub)
+        run: |
+          echo "[stub] helm upgrade kenobi-c2s azure/helm-chart/kenobi-c2s/deployment-app/ \\"
+          echo "          --namespace kenobi-c2s \\"
+          echo "          --set image.tag=sha-${{ steps.vars.outputs.sha7 }} \\"
+          echo "          -f azure/helm-chart/kenobi-c2s/deployment-app/values-dev.yaml"
+          echo ""
+          echo "Dev now running sha-${{ steps.vars.outputs.sha7 }} (commit ${GITHUB_SHA})"
