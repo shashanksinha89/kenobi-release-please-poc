@@ -81,7 +81,7 @@ When the release manager merges PR `chore(main): release 3.6.0`:
 2. release-please immediately runs again (because main was pushed)
 3. This run creates the git tag (`3.6.0`) + GitHub Release in the same job step
 4. The `build-versioned-image` job (gated on `if: release_created == 'true'`) runs in the **same workflow run**
-5. Separately, `build-deploy-dev.yml` also fires (because the merge is a push to main) and rolls dev with the new sha-tag
+5. Separately, `main.yml :: build-deploy-dev` job also fires (because the merge is a push to main) and rolls dev with the new sha-tag
 
 So one merge = one tag + one GitHub release + one versioned-image build + one dev rollout, all from the same commit.
 
@@ -120,11 +120,20 @@ gh api -X PUT /repos/<your-username>/kenobi-release-please-poc/environments/prod
 ```bash
 ls .github/workflows/
 # Should show:
-#   build-deploy-dev.yml
+#   main.yml          ← release-please + build-versioned-image + build-deploy-dev
 #   pr-title-lint.yml
 #   promote.yml
-#   release-please.yml
 ```
+
+**`main.yml` contains three jobs:**
+
+| Job | When it runs | Why |
+|---|---|---|
+| `release-please` | every push to main | Manage the Release PR; cut tag on its merge |
+| `build-versioned-image` | only when release-please cut a tag (`needs:` chain) | Build versioned image. Replaces `azure-build-on-tag.yml`. |
+| `build-deploy-dev` | every push to main, **in parallel** with release-please (no `needs:`) | sha-tagged build + dev rollout. Decoupled from release outcome. |
+
+Per-job `permissions:` and `concurrency:` blocks keep least-privilege and per-flow queueing intact even though everything's in one file.
 
 ---
 
@@ -149,11 +158,13 @@ git push origin main
 ```bash
 sleep 10
 gh run list --limit 3
+gh run view <latest-run-id>
 ```
 
-Two workflow runs fire in parallel for the same commit:
+ONE workflow run (`main`) fires for the commit, with two jobs running in parallel:
 - ✅ `build-deploy-dev` — builds sha-tagged image, deploys to dev (stub)
 - ✅ `release-please` — runs, but **does not open a Release PR** (because `chore:` doesn't qualify)
+- ⊘ `build-versioned-image` — skipped (no tag was cut, so the `if: release_created == 'true'` gate is false)
 
 **Verify:**
 
@@ -188,7 +199,7 @@ git push origin main
 
 ```bash
 sleep 20
-gh run list --workflow release-please.yml --limit 1
+gh run list --workflow main.yml --limit 1
 gh pr list --state open
 ```
 
@@ -224,15 +235,16 @@ gh release list --limit 3
 ```
 
 You should see:
-- ✅ Two new workflow runs fired on the merge commit:
-  - `release-please` workflow: this time both jobs ran — `release-please` (cut the tag) AND `build-versioned-image` (built the versioned stub)
-  - `build-deploy-dev` workflow: rolled dev with the merge commit's sha
+- ✅ ONE new `main` workflow run fired on the merge commit, with all three jobs running:
+  - `release-please` (cut the tag)
+  - `build-versioned-image` (gated path — runs because `release_created == 'true'`)
+  - `build-deploy-dev` (parallel path — rolled dev with the merge commit's sha)
 - ✅ A new tag exists in `gh release list` (e.g. `3.6.0`)
 
 **Inspect the build-versioned-image job:**
 
 ```bash
-RUN_ID=$(gh run list --workflow release-please.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+RUN_ID=$(gh run list --workflow main.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run view $RUN_ID --log | grep -E "Cut tag|Version|Components"
 ```
 
@@ -481,11 +493,11 @@ After this, the next push of a qualifying commit type will open a fresh Release 
 
 | Question | Command |
 |---|---|
-| Did release-please run? | `gh run list --workflow release-please.yml --limit 1` |
+| Did release-please run? | `gh run list --workflow main.yml --limit 1` |
 | Is there a Release PR open right now? | `gh pr list --state open --search 'chore(main): release'` |
 | What tag was last cut? | `gh release list --limit 1` |
 | Did the build-versioned-image job run? | `gh run view <run-id>` (look for both jobs in the JOBS list) |
-| Did dev get a new sha-tagged build? | `gh run list --workflow build-deploy-dev.yml --limit 1` |
+| Did dev get a new sha-tagged build? | `gh run view <main-run-id>` (look at `build-deploy-dev` job status) |
 | Was the promote dispatch successful? | `gh run list --workflow promote.yml --limit 1` |
 
 ### Mental model summary
