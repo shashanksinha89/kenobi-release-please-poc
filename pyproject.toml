@@ -1,0 +1,9 @@
+[project]
+name = "kenobi-c2s"
+version = "1.22.0"
+description = "POC scaffold mirroring kenobi-c2s for release-please evaluation. Real source: github.com/crowdbotics/kenobi-c2s"
+requires-python = ">=3.12"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

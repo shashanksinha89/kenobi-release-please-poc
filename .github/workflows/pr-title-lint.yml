@@ -1,0 +1,43 @@
+name: PR title lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          requireScope: false
+          # Subject must start with a capital letter and have at least one word.
+          # Reject subjects with leading lowercase (forces "Add foo", not "add foo")
+          # so changelog reads cleanly.
+          subjectPattern: ^[A-Z].+$
+          subjectPatternError: |
+            The subject "{subject}" found in the PR title "{title}" didn't match the configured pattern.
+            Subject must start with an uppercase letter.
+            Examples:
+              feat: Add tenant filter to chat endpoints
+              fix(auth): Reject expired Clerk tokens
+              feat!: Drop /v1/legacy endpoint
+            Ticket prefix (KENOBI-XXXX) belongs in the commit body / footer, not the title.
