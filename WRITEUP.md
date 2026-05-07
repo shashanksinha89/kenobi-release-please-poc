@@ -2,7 +2,7 @@
 
 **Ticket:** [COR-2622](https://linear.app/corestory/issue/COR-2622/evaluate-release-please-for-kenobi-c2s)
 **POC repo:** [shashanksinha89/kenobi-release-please-poc](https://github.com/shashanksinha89/kenobi-release-please-poc)
-**Date:** 2026-05-07
+**Date:** 2026-05-07 (updated 2026-05-08 with full kenobi-c2s lifecycle parity)
 
 ---
 
@@ -173,5 +173,99 @@ I'd default to option 1 — chart bump as a one-line follow-up PR triggered from
 ## What this doesn't solve
 
 - **Slack/Teams notifications** for release events. Not release-please's job — straightforward to add a step in the same workflow.
-- **Promoting a build between environments** (dev → qa → prod). release-please cuts the tag; how/when the tag deploys is the existing build-promote workflow's responsibility. The temporary semver-shape guard in PR #1461 stays useful.
 - **Forcing engineers to use Conventional Commits.** PR title lint helps, but humans can still write a misleading subject. This is a culture/discipline concern.
+
+---
+
+## Full kenobi-c2s lifecycle parity test (2026-05-08)
+
+After validating release-please mechanics on day 1, the second round of testing wired up workflows mirroring the real kenobi-c2s structure to prove the four end-to-end lifecycle scenarios work without behavioural change for the team.
+
+### Workflow mapping kenobi-c2s → POC
+
+| kenobi-c2s | POC | Trigger | What it does |
+|---|---|---|---|
+| `azure-build-deploy-dev.yml` | `build-deploy-dev.yml` | push to main | Build sha-tagged image, deploy to dev. Runs in parallel with release-please.yml. |
+| `azure-build-on-tag.yml` | `release-please.yml :: build-versioned-image` job | push to main → Release PR merge | Build versioned image. No deploy. Replaced by the `needs: release-please` job since release-please cuts the tag in-workflow. |
+| `azure-build-promote.yml` | `promote.yml` | manual dispatch | Validate semver, verify tag exists, block prerelease→prod, helm upgrade. |
+| `azure-hotfix-ci.yml` | (folded into Release-As flow + branch-config) | — | The current "build sha-tagged image as standalone hotfix path" is largely obsolete with release-please — see hotfix scenario below. |
+
+### Scenario 1 — Merge to main → auto-deploy to dev
+
+Pushed `feat(cache): Add cache stub` to main. Result: **both workflows fired in parallel**.
+
+- `build-deploy-dev.yml` built `sha-1ef47d4` and deployed to dev (stub) — same behaviour as today.
+- `release-please.yml` ran but only updated/opened a Release PR (`3.6.0`). No tag yet — that requires the Release PR merge.
+
+**Key insight:** Dev cluster always reflects main HEAD on every merge, regardless of release cadence. Decoupling the two workflows preserves this property and matches what the team is used to today.
+
+### Scenario 2 — Release cut
+
+Merged the Release PR (`chore(main): release 3.6.0`). Two workflows fired on the merge commit:
+
+- `release-please.yml` run: release-please job cut tag `3.6.0` + GitHub release. **build-versioned-image** job (in same workflow run) then ran via `needs:` chain — built versioned stub `kenobi-c2s:3.6.0`.
+- `build-deploy-dev.yml` ALSO fired (because the merge commit is a push to main) — built `sha-0bdefe4` and stub-deployed to dev.
+
+**Side-note worth flagging:** the merge commit IS the tag commit, so `kenobi-c2s:3.6.0` and `kenobi-c2s:sha-0bdefe4` are content-identical (same source). The pyproject.toml + manifest version bumps land in that same commit. Functionally, dev runs the 3.6.0 code, just tagged differently. Not a problem, but worth pointing out so people don't get confused looking at the registry.
+
+### Scenario 3 — Promote to QA / prod (with the failure modes)
+
+Manual dispatch of `promote.yml`. Six tests run, all behaving as designed:
+
+| Test | Tag | Env | Expected | Actual |
+|---|---|---|---|---|
+| 3a | `3.6.0` | qa | succeed | ✓ deployed |
+| 3b | `3.6.0` | production | succeed (stable) | ✓ deployed |
+| 3c | `v3.6.0` | qa | **fail** semver-shape (no v prefix allowed) | ✓ blocked at validation |
+| 3d | `99.99.99` | qa | **fail** tag-existence | ✓ blocked at "tag does not exist" |
+| 3e | `3.7.0-rc.1` | qa | succeed (prereleases allowed in qa) | ✓ deployed |
+| 3f | `3.7.0-rc.1` | production | **fail** prerelease-to-prod block | ✓ blocked |
+
+The semver regex differs from kenobi-c2s' current `azure-build-promote.yml`: ours is anchored on bare semver (no `v` prefix). The temporary guard from PR #1461 in real kenobi-c2s graduates from "temporary" to permanent here — it now acts as belt-and-suspenders against someone manually pushing a non-semver tag.
+
+### Scenario 4 — Hotfix
+
+Pushed `fix(api): Patch null-pointer in tenant resolver` with `Release-As: 3.6.1` footer. Manifest was at `3.7.0-rc.1` from prior scenario; the footer overrode that and forced the next release to `3.6.1`.
+
+- Release PR `chore(main): release 3.6.1` opened ✓
+- Merged → tag `3.6.1` cut + build-versioned-image fired ✓
+- `promote.yml` 3.6.1 → qa ✓ → production ✓
+
+**Hotfix footgun discovered:** after the `Release-As: 3.6.1` merge, the manifest is now at `3.6.1`. The previously-cut `3.7.0-rc.1` prerelease is **orphaned** — the next normal `feat:` commit will bump from 3.6.1 to 3.7.0, NOT continue on the 3.7-rc line.
+
+Real consequence: if you have an in-flight prerelease `1.23.0-rc.1` (say, RC for an upcoming minor) and you need to ship a hotfix for currently-prod 1.22.0 → you'd `Release-As: 1.22.1` from main. After that, the next `feat:` on main produces `1.22.2` or `1.23.0` (depending on bump), and your RC line is broken until you `Release-As: 1.23.0-rc.2` or similar to rejoin it.
+
+**The cleaner alternative — release-branch model:**
+
+Maintain a long-lived `release-1.22.x` branch from the 1.22.0 tag. Configure release-please with branch-specific scope so commits on that branch produce 1.22.x patches independently of main. Hotfix flow becomes:
+
+1. `git checkout -b release-1.22.x v1.22.0`
+2. Cherry-pick or land hotfix commit on that branch
+3. release-please opens a Release PR on `release-1.22.x` for `1.22.1`
+4. Merge → tag `1.22.1` cut from the release branch, not from main
+5. `promote.yml 1.22.1 → production` — prod now on hotfix; main is untouched and the RC line continues
+
+This is the pattern that's robust against the in-flight-prerelease problem. Setup cost: one config change + branch protection rule. **Recommendation: use Release-As for trunk-only hotfixes when there's no in-flight RC; use a release branch when RC + hotfix collision is a real risk.**
+
+### What the team needs to do differently (final answer)
+
+Compared to today:
+- **Same:** push to main auto-deploys to dev. Dispatching a manual workflow promotes to qa/prod. Tag format. Semver enforcement. Prerelease block.
+- **New:** instead of hand-cutting `git tag v1.2.3 && git push --tags`, the engineer merges a release-please-generated PR. The PR shows exactly what's about to ship (changelog + version bump diff) — strictly more information than the current manual-tag flow.
+- **New constraint:** PR titles must follow Conventional Commits. PR title lint blocks merges that don't.
+- **New workflow file structure:** retire `azure-build-on-tag.yml` (its job is now in `release-please.yml`). Retire `azure-hotfix-ci.yml` (Release-As footer covers the simple case; release branch covers the hard one). Keep `azure-build-deploy-dev.yml` (parallel to release-please). Keep `azure-build-promote.yml` with regex updated for bare semver.
+
+### Final POC repo state
+
+After day-2 testing, 7 tags cut total, 5 promote.yml dispatches, 2 hotfix scenarios validated:
+
+```
+3.6.1        ← hotfix via Release-As (current manifest)
+3.7.0-rc.1   ← prerelease via Release-As (orphaned by hotfix)
+3.6.0        ← normal minor bump via feat: commit
+3.5.0        ← Release-As docs override (day 1)
+2.0.0        ← major bump via feat!: (day 1)
+1.23.0       ← minor bump via feat: (day 1)
+```
+
+All tags emitted bare (no `v` prefix). Dev was deployed on every main push. QA and production deploys exercised guards correctly. Hotfix flow ran end-to-end with documented footgun + mitigation.
