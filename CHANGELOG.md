@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.6.1...3.7.0) (2026-05-07)
+
+
+### Features
+
+* **consolidation:** Verify both jobs run in one workflow ([026e6ab](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/026e6ab2487f7ddab3ff68c2c0676b411991450b))
+
 ## [3.6.1](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.7.0-rc.1...3.6.1) (2026-05-07)
 
 
