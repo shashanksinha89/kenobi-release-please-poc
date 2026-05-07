@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.6.1](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.7.0-rc.1...3.6.1) (2026-05-07)
+
+
+### Bug Fixes
+
+* **api:** Patch null-pointer in tenant resolver (hotfix) ([cd816ff](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/cd816ff2bf5bcd144344d08708c2058f217c001e))
+
 ## [3.7.0-rc.1](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.6.0...3.7.0-rc.1) (2026-05-07)
 
 
