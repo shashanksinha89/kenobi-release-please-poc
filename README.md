@@ -70,7 +70,7 @@ Tags are **bare semver** (`1.2.3`, `1.2.3-rc.1`) — no `v` prefix. This matches
 
 <body — optional, free-form>
 
-<footers — KENOBI-XXXX goes here>
+<footers — COR-XXXX goes here>
 ```
 
 | Type | Bump |
@@ -88,7 +88,7 @@ feat(api): Add tenant-aware chat endpoint
 Routes chat requests through the new TenantContext middleware so
 per-org isolation is enforced at the orchestrator boundary.
 
-KENOBI-2371
+COR-2371
 ```
 
 `Release-As: X.Y.Z` footer forces an explicit version (used for hotfixes and ad-hoc RCs).

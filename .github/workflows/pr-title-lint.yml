@@ -40,4 +40,4 @@ jobs:
               feat: Add tenant filter to chat endpoints
               fix(auth): Reject expired Clerk tokens
               feat!: Drop /v1/legacy endpoint
-            Ticket prefix (KENOBI-XXXX) belongs in the commit body / footer, not the title.
+            Ticket prefix (COR-XXXX) belongs in the commit body / footer, not the title.

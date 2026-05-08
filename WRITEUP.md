@@ -53,18 +53,18 @@ The downstream `build` job (a stub `echo` to demonstrate option #3 — same work
 
 **Can it block merge?** Yes — register the `pull_request` workflow as a required status check in branch protection. PRs whose titles don't match the pattern won't be mergeable. In the POC repo I left it advisory; in kenobi-c2s I'd make it required.
 
-### 3. KENOBI-XXXX ticket prefixes — subject or footer?
+### 3. COR-XXXX ticket prefixes — subject or footer?
 
 **Recommendation: footer.** Tested both:
 
 ```
-✗ feat(api): KENOBI-2371 Add tenant middleware  ← changelog reads "KENOBI-2371 Add..."
+✗ feat(api): COR-2371 Add tenant middleware  ← changelog reads "COR-2371 Add..."
 ✓ feat(api): Add tenant middleware              ← changelog reads "Add tenant middleware"
    <body>
-   KENOBI-2371                                  ← ticket searchable in commit log + PR
+   COR-2371                                  ← ticket searchable in commit log + PR
 ```
 
-The footer route keeps the changelog clean (the ticket prefix isn't useful for end-users reading release notes), while still being searchable via `git log --grep` and visible in the PR/commit body. The POC commits used the footer convention (`KENOBI-9999`, `KENOBI-9998`).
+The footer route keeps the changelog clean (the ticket prefix isn't useful for end-users reading release notes), while still being searchable via `git log --grep` and visible in the PR/commit body. The POC commits used the footer convention (`COR-9999`, `COR-9998`).
 
 If we want **enforcement** of ticket presence, that's a separate PR-body-lint action — release-please doesn't care.
 

@@ -234,7 +234,7 @@ EOF
 git add -A
 git commit -m "feat(api): Add new endpoint for X
 
-KENOBI-1234"
+COR-1234"
 git push origin main
 ```
 
@@ -428,7 +428,7 @@ EOF
 git add -A
 git commit -m "fix(security): Patch null-pointer in tenant resolver
 
-KENOBI-1235
+COR-1235
 
 Release-As: 3.6.1"
 git push origin main

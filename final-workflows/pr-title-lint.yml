@@ -52,8 +52,8 @@ jobs:
               fix(auth): Reject expired Clerk tokens
               feat!: Drop /v1/legacy endpoint
 
-            KENOBI-XXXX prefix belongs in the commit body / footer, not the title:
+            COR-XXXX prefix belongs in the commit body / footer, not the title:
 
               feat(api): Add tenant filter
 
-              KENOBI-1234
+              COR-1234
