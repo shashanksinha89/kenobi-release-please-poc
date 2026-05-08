@@ -102,6 +102,37 @@ A safe, reversible cutover:
 
 This order means the new system runs in shadow alongside the old for a brief period — easy to roll back if something unexpected surfaces. After the migration completes (typically 1–2 days), step 4 finishes the transition.
 
+## Interaction with `scripts/generate_build_info.py`
+
+kenobi-c2s embeds version metadata into the image at build time via [`scripts/generate_build_info.py`](https://github.com/crowdbotics/kenobi-c2s/blob/main/scripts/generate_build_info.py), called from the `Dockerfile` (`RUN uv run scripts/generate_build_info.py --output build.json`). The resulting `build.json` ships inside the image. release-please does not change anything about how this script works, but two things are worth knowing:
+
+**1. The script's tag regex already tolerates bare semver.**
+
+```python
+tag_pattern = re.compile(r"^v?(\d+\.\d+\.\d+.*)$")
+```
+
+The `v?` is optional — both `v1.2.3` and bare `1.2.3` match, and the captured `group(1)` is always bare. So switching from v-prefixed (current `19.0.2`) to release-please-emitted bare semver (e.g. `1.23.0`) produces an identical `version` field in `build.json`. **No code change to the script is required.**
+
+**2. The build-arg pattern in `main.yml` matches what the script expects.**
+
+The script resolves the version in this order:
+1. `git describe --tags --exact-match HEAD` (works because `.git/` is in the docker build context — `.dockerignore` deliberately keeps it there)
+2. `GITHUB_REF` env var (set via `ARG GITHUB_REF` in the Dockerfile, fed from build-args in the workflow)
+3. Branch + short SHA fallback (`0.0.0-dev+main.abc1234`)
+
+| Job in `main.yml` | What `GITHUB_REF` is set to | What `build.json::version` ends up as |
+|---|---|---|
+| `build-versioned-image` | `refs/tags/1.23.0` (release-please tag, prefixed) | `1.23.0` |
+| `build-and-deploy-dev` (sha image) | `refs/heads/main` | `0.0.0-dev+main.abc1234` |
+| Promote-time deploy (`promote.yml`) | n/a — pulls existing versioned image, no rebuild | `1.23.0` (baked in at versioned-build time) |
+
+**Why this matters:** the dev image and the versioned image for the *same merge commit* will have **different** `version` fields in their respective `build.json` files (`0.0.0-dev+main.<sha>` vs `1.23.0`). They're content-different at the build.json layer even though the source code is identical. This matches current kenobi-c2s behaviour (today, `azure-build-deploy-dev.yml` and `azure-build-on-tag.yml` produce different build.json content for the same source).
+
+**3. `build_timestamp` is always per-build.**
+
+Even with identical source, every docker build produces a fresh `build_timestamp`. This means image digests for the dev sha-tagged image and the versioned image will differ. Same as today — no change.
+
 ## Things that intentionally do NOT move into release-please
 
 | Concern | Why it stays separate |

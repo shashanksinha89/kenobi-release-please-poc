@@ -91,13 +91,21 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # build-args feed scripts/generate_build_info.py inside the Dockerfile.
+      # The script needs GITHUB_REF in the `refs/tags/X.Y.Z` form to extract
+      # the version (its primary path is `git describe --tags --exact-match
+      # HEAD`, which works because `.git/` is in the docker build context per
+      # the existing `.dockerignore`; the env var is the fallback).
+      # The script's regex tolerates both `v1.2.3` and bare `1.2.3` — bare
+      # semver tags from release-please produce a bare-semver `version` field
+      # in build.json (e.g. `"version": "1.23.0"`).
       - name: Build & Push versioned image
         uses: docker/build-push-action@v7
         with:
           context: .
           push: true
           build-args: |
-            GITHUB_REF=${{ needs.release-please.outputs.tag_name }}
+            GITHUB_REF=refs/tags/${{ needs.release-please.outputs.tag_name }}
             GITHUB_SHA=${{ github.sha }}
           tags: |
             ${{ env.IMAGE_REPO }}:${{ needs.release-please.outputs.tag_name }}
@@ -279,6 +287,10 @@ jobs:
 
       - uses: docker/setup-buildx-action@v4
 
+      # build-args feed scripts/generate_build_info.py inside the Dockerfile.
+      # On push to main, github.ref = `refs/heads/main` — the script falls
+      # through to its branch+sha resolution path and produces a dev-style
+      # version like `0.0.0-dev+main.abc1234` in build.json. Same as today.
       - name: Build & Push Docker Image (sha + branch tags)
         uses: docker/build-push-action@v7
         with:
