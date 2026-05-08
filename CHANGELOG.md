@@ -1,5 +1,18 @@
 # Changelog
 
+## [5.0.0-rc.1](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.7.0...5.0.0-rc.1) (2026-05-08)
+
+
+### Features
+
+* **api:** Add label-test feature ([#9](https://github.com/shashanksinha89/kenobi-release-please-poc/issues/9)) ([b2c7223](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/b2c722331e22183c858770a750859b4333e66c1a))
+* **api:** Add PR-body-override test feature ([#10](https://github.com/shashanksinha89/kenobi-release-please-poc/issues/10)) ([5df5df9](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/5df5df97f42f55e2ce4d34467fc4c78ebadc210a))
+
+
+### Bug Fixes
+
+* **final-workflows:** Set GITHUB_REF correctly for generate_build_info.py ([68d94cd](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/68d94cddc654c5b300f24189857732664f0cee4a))
+
 ## [3.7.0](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.6.1...3.7.0) (2026-05-07)
 
 
