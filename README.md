@@ -93,7 +93,7 @@ KENOBI-2371
 
 `Release-As: X.Y.Z` footer forces an explicit version (used for hotfixes and ad-hoc RCs).
 
-**PR-label alternative:** apply a `release-as: X.Y.Z` label to a merged PR for the same effect — useful when the release manager wants to override the version without asking the engineer to amend their commit. See [RELEASE_MANAGER_GUIDE.md](./RELEASE_MANAGER_GUIDE.md#alternative-release-as-xyz-pr-label-no-commit-footer-needed).
+**PR-body alternative:** put `Release-As: X.Y.Z` in the PR description body — provided the repo's squash-merge settings carry PR body into the commit body. Lets the release manager override without amending the engineer's commit. **Note:** the `release-as:` PR *label* was tested empirically and **does NOT work** with release-please. See [RELEASE_MANAGER_GUIDE.md](./RELEASE_MANAGER_GUIDE.md#alternative-release-as-in-pr-description-no-commit-message-edit-needed).
 
 ## How the lifecycle flows
 

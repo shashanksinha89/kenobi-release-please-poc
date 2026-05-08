@@ -235,7 +235,16 @@ Pushed `fix(api): Patch null-pointer in tenant resolver` with `Release-As: 3.6.1
 
 **Hotfix footgun discovered:** after the `Release-As: 3.6.1` merge, the manifest is now at `3.6.1`. The previously-cut `3.7.0-rc.1` prerelease is **orphaned** — the next normal `feat:` commit will bump from 3.6.1 to 3.7.0, NOT continue on the 3.7-rc line.
 
-**Convenience: PR labels as an alternative to footers.** release-please also accepts a `release-as: X.Y.Z` label on a merged PR — equivalent to a `Release-As:` commit footer, but applied via UI. Useful when the release manager wants to override the version without asking the engineer to amend their commit. Same orphan-the-RC-line risk applies. See `RELEASE_MANAGER_GUIDE.md` for the exact label format and an example.
+**Convenience: `Release-As:` in PR body as an alternative to commit footers.** Tested empirically 2026-05-08:
+
+- Putting `Release-As: 5.0.0-rc.1` as a **PR body footer** + squashing with repo settings `squash_merge_commit_message=PR_BODY` → release-please respected the override and cut tag `5.0.0-rc.1` (skipped the natural `3.8.0`).
+- Putting a `release-as: 5.0.0-rc.1` **PR label** on a feature PR before merge → label was **ignored**; release-please opened the natural `3.8.0` Release PR. The `release-as:` label is NOT a release-please feature.
+
+So the supported override surfaces are:
+1. `Release-As:` footer in the engineer's commit message — the canonical way
+2. `Release-As:` footer in the PR body, only if repo squash settings carry PR body into the commit body — useful when the release manager wants to override without amending the engineer's commit
+
+See `RELEASE_MANAGER_GUIDE.md` for the exact repo-settings command and a worked example.
 
 Real consequence: if you have an in-flight prerelease `1.23.0-rc.1` (say, RC for an upcoming minor) and you need to ship a hotfix for currently-prod 1.22.0 → you'd `Release-As: 1.22.1` from main. After that, the next `feat:` on main produces `1.22.2` or `1.23.0` (depending on bump), and your RC line is broken until you `Release-As: 1.23.0-rc.2` or similar to rejoin it.
 

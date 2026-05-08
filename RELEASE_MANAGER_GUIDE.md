@@ -74,33 +74,47 @@ This **forces** the next release to be the version you specify, regardless of bu
 
 ⚠️ Comes with a footgun — see Scenario 4.
 
-### Alternative: `release-as: X.Y.Z` PR label (no commit footer needed)
+### Alternative: `Release-As:` in PR description (no commit-message edit needed)
 
-release-please also reads a **PR label** of the form `release-as: 1.23.0-rc.1` (lowercase, with the colon and version). Apply the label to any merged PR (a normal `feat:` / `fix:` PR — *not* the Release PR itself) and release-please will treat it identically to a `Release-As:` footer on the squash commit.
+> **Earlier version of this guide claimed a `release-as: X.Y.Z` PR label was a release-please feature. That was incorrect.** Empirically tested in the POC (PR #9 with the label, then PR #10 with the PR-body trick) — release-please ignored the label entirely and only respected the PR-body-as-squash-footer mechanism documented below.
 
-**When to prefer the label over the footer:**
+release-please reads `Release-As:` from **commit messages only**. It does not parse PR labels. To override the version *without* asking the engineer to amend their commit, the only built-in mechanism is to land the footer in the squash commit via the **PR description body**.
 
-- The release manager is approving the merge and wants to override the version *without* asking the engineer to amend their commit message.
-- You're cutting an ad-hoc RC and don't want a `chore: cut RC` commit polluting the history. Just label the next regular PR.
-- You've already merged a PR and *then* decide you want to force a specific version — apply the label after merge, push any new commit (or trigger the workflow), and release-please picks it up.
-
-**How to apply:**
+**Prerequisite — repo settings must use the PR body for squash commits.** Default GitHub setting is "Pull request title and commit messages" which would *not* carry the PR body into the squash commit. Change to "Pull request title and description":
 
 ```bash
-# Create the label once per repo (anyone can do this)
-gh label create "release-as: 1.23.0-rc.1" --color "FFD700" --repo crowdbotics/kenobi-c2s
-
-# Apply to a PR before or after merge
-gh pr edit <PR_NUM> --add-label "release-as: 1.23.0-rc.1" --repo crowdbotics/kenobi-c2s
+gh api -X PATCH /repos/crowdbotics/kenobi-c2s \
+  -f squash_merge_commit_title=PR_TITLE \
+  -f squash_merge_commit_message=PR_BODY
 ```
 
-Or click "Labels → New label" in the GitHub UI on the PR sidebar.
+Or via UI: Settings → General → Pull Requests → "Default to pull request title and description for squash merges."
 
-**Footgun parity:** the label has the **same orphan-the-RC-line risk** as the footer (Scenario 4). It's a UI convenience, not a different mechanism.
+**Once the prerequisite is set:**
 
-**One subtlety:** if both a `Release-As:` footer AND a `release-as:` label exist on the same merged PR, release-please uses the **footer** (it takes precedence). Don't use both.
+1. The engineer opens the PR with whatever commit message they like (no `Release-As:` needed in the commit).
+2. The release manager (or anyone with write access) edits the PR description to include a footer like:
 
-**No config change required** — the label feature is built into release-please-action. No flag in `release-please-config.json` to enable.
+```
+Testing tenant context middleware change.
+
+Release-As: 1.23.0-rc.1
+```
+
+3. Squash-merge → the PR description becomes the commit body → `Release-As:` is now in the squash commit footer → release-please picks it up on the next run and forces the next release to `1.23.0-rc.1`.
+
+**When to prefer this over a `Release-As:` footer in the engineer's commit:**
+
+- Release manager wants to override the version after the engineer has already pushed.
+- Cutting an ad-hoc RC without a separate `chore: cut RC` commit.
+- The engineer's commit history was clean and you don't want to amend it.
+
+**Footgun parity:** the orphan-the-RC-line risk from Scenario 4 applies here too. Same mechanism, just delivered via a different surface.
+
+**Verified empirically (2026-05-08):**
+
+- Manifest at 3.7.0 + plain `feat:` commit + `Release-As: 5.0.0-rc.1` in PR body + squash-merge → tag `5.0.0-rc.1` cut. Skipped 3.8.0 entirely.
+- Manifest at 3.7.0 + plain `feat:` commit + `release-as: 5.0.0-rc.1` *label* on the PR + squash-merge → tag `3.8.0` opened in the Release PR. **Label was ignored.**
 
 ### What does "merging the Release PR" actually do?
 
@@ -404,7 +418,7 @@ cat release-please-manifest.json
 
 Imagine production is on 3.6.0 (an older stable) and there's a security fix that needs to ship as 3.6.1 — without picking up any of the in-flight 9.0.0-rc.1 work.
 
-> **PR-label alternative:** if the engineer's PR is already merged (or you want to skip the commit-message step entirely), apply the label `release-as: 3.6.1` to the merged PR instead. release-please will pick it up on the next workflow run with identical effect. See Part 1 → "Alternative: `release-as: X.Y.Z` PR label".
+> **PR-body alternative:** if you don't want to ask the engineer to amend their commit, the override can also live in the PR description body — provided the repo's squash-merge settings are configured to put PR body into the commit body. See Part 1 → "Alternative: `Release-As:` in PR description".
 
 ```bash
 cat > app/security_patch.py <<'EOF'
