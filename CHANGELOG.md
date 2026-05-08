@@ -1,5 +1,12 @@
 # Changelog
 
+## [5.0.1-rc.1](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/5.0.0-rc.1...5.0.1-rc.1) (2026-05-08)
+
+
+### Bug Fixes
+
+* **docs:** Correct release-as override mechanism — label does NOT work ([00e080e](https://github.com/shashanksinha89/kenobi-release-please-poc/commit/00e080e3909330782e90953c6b5626b6fe376cf7))
+
 ## [5.0.0-rc.1](https://github.com/shashanksinha89/kenobi-release-please-poc/compare/3.7.0...5.0.0-rc.1) (2026-05-08)
 
 
