@@ -12,7 +12,7 @@ Tracks **[COR-2622](https://linear.app/corestory/issue/COR-2622/evaluate-release
 
 | Doc | When to read |
 |-----|--------------|
-| **[WRITEUP.md](./WRITEUP.md)** | Full evaluation: TL;DR, answers to the 7 questions in the ticket, all 4 lifecycle scenarios tested, gotchas + recommendations. **Read this first.** |
+| **[WRITEUP.md](./WRITEUP.md)** | Full evaluation: TL;DR, answers to the 8 questions in the ticket, all 4 lifecycle scenarios tested, gotchas + recommendations. **Read this first.** |
 | **[RELEASE_MANAGER_GUIDE.md](./RELEASE_MANAGER_GUIDE.md)** | Step-by-step walkthrough for someone reproducing the scenarios in this POC themselves. ~25 minutes end-to-end. |
 | **[final-workflows/README.md](./final-workflows/README.md)** | What goes where for the actual kenobi-c2s migration. Production-ready workflow files with all real ACR logins, helm `--set` lines, secret wiring, tenant image build chain. |
 

@@ -34,7 +34,7 @@ The downstream `build` job (a stub `echo` to demonstrate option #3 — same work
 
 ---
 
-## Answers to the 7 ticket questions
+## Answers to the 8 ticket questions
 
 ### 1. Does the squash-merge → PR title flow play nicely?
 
@@ -140,6 +140,12 @@ The temporary semver-shape guard in PR #1461 already accepts `-rc.N` suffixes (`
 4. Merge it → first auto-tag cut (e.g. `1.22.1` if there are fix-only commits since bootstrap).
 5. Old `19.x` tags remain in the repo for archeology — nothing's deleted.
 
+### 8. Does `scripts/generate_build_info.py` still work?
+
+**Yes, no script change required.** The script's regex `^v?(\d+\.\d+\.\d+.*)$` already tolerates bare semver. The workflow passes `GITHUB_REF=refs/tags/X.Y.Z` to the docker build-arg, matching the script's env-var fallback path. Versioned image gets `version: 1.23.0` in `build.json`; dev sha image gets `0.0.0-dev+main.<sha>`. Same per-image-type difference as today (today's `azure-build-deploy-dev.yml` and `azure-build-on-tag.yml` already produce different `build.json` content for the same source).
+
+Detail in [final-workflows/README.md](./final-workflows/README.md#interaction-with-scriptsgenerate_build_infopy).
+
 ---
 
 ## Gotchas observed in the POC
@@ -174,41 +180,6 @@ I'd default to option 1 — chart bump as a one-line follow-up PR triggered from
 
 - **Slack/Teams notifications** for release events. Not release-please's job — straightforward to add a step in the same workflow.
 - **Forcing engineers to use Conventional Commits.** PR title lint helps, but humans can still write a misleading subject. This is a culture/discipline concern.
-
----
-
-## Interaction with `scripts/generate_build_info.py` (kenobi-c2s build-time version metadata)
-
-kenobi-c2s embeds version metadata into the image at build time via [`scripts/generate_build_info.py`](https://github.com/crowdbotics/kenobi-c2s/blob/main/scripts/generate_build_info.py), called from the `Dockerfile` (`RUN uv run scripts/generate_build_info.py --output build.json`). The resulting `build.json` ships inside the image. **Confirmed: release-please adoption requires no change to the script.** Three things to know:
-
-**1. The script's tag regex already tolerates bare semver.**
-
-```python
-tag_pattern = re.compile(r"^v?(\d+\.\d+\.\d+.*)$")
-```
-
-The `v?` is optional — both `v1.2.3` and bare `1.2.3` match, and the captured `group(1)` is always bare. Switching from v-prefixed (current `19.0.2`) to release-please-emitted bare semver (e.g. `1.23.0`) produces an identical `version` field in `build.json`. **No code change to the script is required.**
-
-**2. The build-arg pattern matches what the script expects.**
-
-The script resolves the version in this order:
-1. `git describe --tags --exact-match HEAD` (works because `.git/` is in the docker build context — `.dockerignore` deliberately keeps it there)
-2. `GITHUB_REF` env var (set via `ARG GITHUB_REF` in the Dockerfile, fed from build-args in the workflow)
-3. Branch + short SHA fallback (`0.0.0-dev+main.abc1234`)
-
-Per-job mapping in the new `release-and-dev.yml`:
-
-| Job | What `GITHUB_REF` is set to | What `build.json::version` ends up as |
-|---|---|---|
-| `build-versioned-image` | `refs/tags/1.23.0` (release-please tag, prefixed) | `1.23.0` |
-| `build-and-deploy-dev` (sha image) | `refs/heads/main` | `0.0.0-dev+main.abc1234` |
-| Promote-time deploy (`promote.yml`) | n/a — pulls existing versioned image, no rebuild | `1.23.0` (baked in at versioned-build time) |
-
-**3. `build_timestamp` is always per-build.**
-
-Every docker build produces a fresh `build_timestamp`. The dev image and the versioned image for the *same merge commit* will have different `version` AND `build_timestamp` fields in their respective `build.json` files. Same behavior as today — `azure-build-deploy-dev.yml` and `azure-build-on-tag.yml` already produce different `build.json` content for the same source. No regression.
-
-**Verification trail:** the build-arg pattern was originally wrong in the first cut of `final-workflows/release-and-dev.yml` (passed `GITHUB_REF=1.23.0` instead of `refs/tags/1.23.0`). Caught and corrected during static analysis. See [final-workflows/README.md](./final-workflows/README.md#interaction-with-scriptsgenerate_build_infopy) for the production-ready version.
 
 ---
 
