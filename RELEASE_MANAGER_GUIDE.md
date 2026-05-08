@@ -70,8 +70,37 @@ This **forces** the next release to be the version you specify, regardless of bu
 - Hotfixes (force a patch number while skipping ahead/back)
 - Stabilizing a prerelease (`Release-As: 1.0.0` to bless a 0.x as stable)
 - Coordinating with externally-mandated versions
+- Cutting an ad-hoc RC (`Release-As: 1.23.0-rc.1`) without setting up a separate `develop` branch
 
 ⚠️ Comes with a footgun — see Scenario 4.
+
+### Alternative: `release-as: X.Y.Z` PR label (no commit footer needed)
+
+release-please also reads a **PR label** of the form `release-as: 1.23.0-rc.1` (lowercase, with the colon and version). Apply the label to any merged PR (a normal `feat:` / `fix:` PR — *not* the Release PR itself) and release-please will treat it identically to a `Release-As:` footer on the squash commit.
+
+**When to prefer the label over the footer:**
+
+- The release manager is approving the merge and wants to override the version *without* asking the engineer to amend their commit message.
+- You're cutting an ad-hoc RC and don't want a `chore: cut RC` commit polluting the history. Just label the next regular PR.
+- You've already merged a PR and *then* decide you want to force a specific version — apply the label after merge, push any new commit (or trigger the workflow), and release-please picks it up.
+
+**How to apply:**
+
+```bash
+# Create the label once per repo (anyone can do this)
+gh label create "release-as: 1.23.0-rc.1" --color "FFD700" --repo crowdbotics/kenobi-c2s
+
+# Apply to a PR before or after merge
+gh pr edit <PR_NUM> --add-label "release-as: 1.23.0-rc.1" --repo crowdbotics/kenobi-c2s
+```
+
+Or click "Labels → New label" in the GitHub UI on the PR sidebar.
+
+**Footgun parity:** the label has the **same orphan-the-RC-line risk** as the footer (Scenario 4). It's a UI convenience, not a different mechanism.
+
+**One subtlety:** if both a `Release-As:` footer AND a `release-as:` label exist on the same merged PR, release-please uses the **footer** (it takes precedence). Don't use both.
+
+**No config change required** — the label feature is built into release-please-action. No flag in `release-please-config.json` to enable.
 
 ### What does "merging the Release PR" actually do?
 
@@ -374,6 +403,8 @@ cat release-please-manifest.json
 #### 4a — Hotfix via `Release-As:` footer
 
 Imagine production is on 3.6.0 (an older stable) and there's a security fix that needs to ship as 3.6.1 — without picking up any of the in-flight 9.0.0-rc.1 work.
+
+> **PR-label alternative:** if the engineer's PR is already merged (or you want to skip the commit-message step entirely), apply the label `release-as: 3.6.1` to the merged PR instead. release-please will pick it up on the next workflow run with identical effect. See Part 1 → "Alternative: `release-as: X.Y.Z` PR label".
 
 ```bash
 cat > app/security_patch.py <<'EOF'

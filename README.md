@@ -91,7 +91,9 @@ per-org isolation is enforced at the orchestrator boundary.
 KENOBI-2371
 ```
 
-`Release-As: X.Y.Z` footer forces an explicit version (used for hotfixes).
+`Release-As: X.Y.Z` footer forces an explicit version (used for hotfixes and ad-hoc RCs).
+
+**PR-label alternative:** apply a `release-as: X.Y.Z` label to a merged PR for the same effect — useful when the release manager wants to override the version without asking the engineer to amend their commit. See [RELEASE_MANAGER_GUIDE.md](./RELEASE_MANAGER_GUIDE.md#alternative-release-as-xyz-pr-label-no-commit-footer-needed).
 
 ## How the lifecycle flows
 
