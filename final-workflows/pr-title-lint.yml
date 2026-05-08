@@ -6,7 +6,7 @@
 # **Add this workflow as a required status check on `main`** — without it,
 # a PR with a non-conventional title can land and silently break release-please.
 
-name: pr-title-lint
+name: PR Title Lint
 
 on:
   pull_request:

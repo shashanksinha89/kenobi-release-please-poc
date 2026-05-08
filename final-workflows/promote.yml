@@ -11,7 +11,7 @@
 #   - All secret/var wiring is identical to the original — no behaviour
 #     change for the deployed pod.
 
-name: promote
+name: Promote to QA / Production
 
 on:
   workflow_dispatch:

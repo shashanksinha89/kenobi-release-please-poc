@@ -124,7 +124,7 @@ When the release manager merges PR `chore(main): release 3.6.0`:
 2. release-please immediately runs again (because main was pushed)
 3. This run creates the git tag (`3.6.0`) + GitHub Release in the same job step
 4. The `build-versioned-image` job (gated on `if: release_created == 'true'`) runs in the **same workflow run**
-5. Separately, `main.yml :: build-deploy-dev` job also fires (because the merge is a push to main) and rolls dev with the new sha-tag
+5. Separately, `release-and-dev.yml :: build-deploy-dev` job also fires (because the merge is a push to main) and rolls dev with the new sha-tag
 
 So one merge = one tag + one GitHub release + one versioned-image build + one dev rollout, all from the same commit.
 
@@ -163,12 +163,12 @@ gh api -X PUT /repos/<your-username>/kenobi-release-please-poc/environments/prod
 ```bash
 ls .github/workflows/
 # Should show:
-#   main.yml          ← release-please + build-versioned-image + build-deploy-dev
+#   release-and-dev.yml          ← release-please + build-versioned-image + build-deploy-dev
 #   pr-title-lint.yml
 #   promote.yml
 ```
 
-**`main.yml` contains three jobs:**
+**`release-and-dev.yml` contains three jobs:**
 
 | Job | When it runs | Why |
 |---|---|---|
@@ -242,7 +242,7 @@ git push origin main
 
 ```bash
 sleep 20
-gh run list --workflow main.yml --limit 1
+gh run list --workflow release-and-dev.yml --limit 1
 gh pr list --state open
 ```
 
@@ -287,7 +287,7 @@ You should see:
 **Inspect the build-versioned-image job:**
 
 ```bash
-RUN_ID=$(gh run list --workflow main.yml --limit 1 --json databaseId --jq '.[0].databaseId')
+RUN_ID=$(gh run list --workflow release-and-dev.yml --limit 1 --json databaseId --jq '.[0].databaseId')
 gh run view $RUN_ID --log | grep -E "Cut tag|Version|Components"
 ```
 
@@ -538,7 +538,7 @@ After this, the next push of a qualifying commit type will open a fresh Release 
 
 | Question | Command |
 |---|---|
-| Did release-please run? | `gh run list --workflow main.yml --limit 1` |
+| Did release-please run? | `gh run list --workflow release-and-dev.yml --limit 1` |
 | Is there a Release PR open right now? | `gh pr list --state open --search 'chore(main): release'` |
 | What tag was last cut? | `gh release list --limit 1` |
 | Did the build-versioned-image job run? | `gh run view <run-id>` (look for both jobs in the JOBS list) |

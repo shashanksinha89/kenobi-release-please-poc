@@ -13,7 +13,7 @@
 # Per-job `permissions:` and `concurrency:` blocks preserve least-privilege +
 # per-flow queueing semantics even though all three live in one file.
 
-name: main
+name: Release & Dev Deploy
 
 on:
   push:

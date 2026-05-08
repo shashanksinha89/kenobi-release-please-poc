@@ -183,12 +183,12 @@ After validating release-please mechanics on day 1, the second round of testing 
 
 ### Workflow mapping kenobi-c2s → POC
 
-After consolidation: **3 workflow files** instead of 4. Both `release-please` mechanics and `build-deploy-dev` live in one `main.yml` (both fire on `push: main`), with per-job `permissions:` and `concurrency:` blocks preserving least-privilege and per-flow queueing.
+After consolidation: **3 workflow files** instead of 4. Both `release-please` mechanics and `build-deploy-dev` live in one `release-and-dev.yml` (both fire on `push: main`), with per-job `permissions:` and `concurrency:` blocks preserving least-privilege and per-flow queueing.
 
 | kenobi-c2s | POC | Trigger | What it does |
 |---|---|---|---|
-| `azure-build-deploy-dev.yml` | `main.yml :: build-deploy-dev` job | push to main | Build sha-tagged image, deploy to dev. **No `needs:` clause** — runs in parallel with `release-please` job; dev rollouts not blocked by release-please failures. |
-| `azure-build-on-tag.yml` | `main.yml :: build-versioned-image` job | push to main → Release PR merge | Build versioned image. Gated on `needs.release-please.outputs.release_created == 'true'`. Replaced by `needs:` chain instead of cross-workflow tag-trigger (avoids the `GITHUB_TOKEN` footgun). |
+| `azure-build-deploy-dev.yml` | `release-and-dev.yml :: build-deploy-dev` job | push to main | Build sha-tagged image, deploy to dev. **No `needs:` clause** — runs in parallel with `release-please` job; dev rollouts not blocked by release-please failures. |
+| `azure-build-on-tag.yml` | `release-and-dev.yml :: build-versioned-image` job | push to main → Release PR merge | Build versioned image. Gated on `needs.release-please.outputs.release_created == 'true'`. Replaced by `needs:` chain instead of cross-workflow tag-trigger (avoids the `GITHUB_TOKEN` footgun). |
 | `azure-build-promote.yml` | `promote.yml` | manual dispatch | Validate semver, verify tag exists, block prerelease→prod, helm upgrade. |
 | `azure-hotfix-ci.yml` | (folded into Release-As flow + branch-config) | — | The current "build sha-tagged image as standalone hotfix path" is largely obsolete with release-please — see hotfix scenario below. |
 
@@ -267,7 +267,7 @@ Compared to today:
 - **New:** instead of hand-cutting `git tag v1.2.3 && git push --tags`, the engineer merges a release-please-generated PR. The PR shows exactly what's about to ship (changelog + version bump diff) — strictly more information than the current manual-tag flow.
 - **New constraint:** PR titles must follow Conventional Commits. PR title lint blocks merges that don't.
 - **New workflow file structure (3 files total):**
-  - `main.yml` — single workflow on `push: main` containing 3 jobs: `release-please`, `build-versioned-image` (gated on Release PR merge), `build-deploy-dev` (parallel, always runs). Replaces `azure-build-deploy-dev.yml` + `azure-build-on-tag.yml`.
+  - `release-and-dev.yml` — single workflow on `push: main` containing 3 jobs: `release-please`, `build-versioned-image` (gated on Release PR merge), `build-deploy-dev` (parallel, always runs). Replaces `azure-build-deploy-dev.yml` + `azure-build-on-tag.yml`.
   - `promote.yml` — manual dispatch, qa/prod helm upgrade. Replaces `azure-build-promote.yml` (regex updated for bare semver, `create_release` input dropped since release-please creates the GitHub Release at merge time).
   - `pr-title-lint.yml` — pull_request trigger, Conventional Commits enforcement. New requirement.
   - **Retire:** `azure-build-on-tag.yml`, `azure-hotfix-ci.yml`. The Release-As footer covers trunk-only hotfixes; release branches cover the in-flight-RC case.

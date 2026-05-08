@@ -32,11 +32,11 @@ The workflows in `.github/workflows/` are **stubs that `echo` placeholder comman
 ├── release-please-config.json           # release-please config: python type, no v-prefix
 ├── release-please-manifest.json         # tracks current released version
 ├── .github/workflows/                   # POC stubs (3 files, consolidated)
-│   ├── main.yml                         # release-please + build-versioned-image + build-deploy-dev
+│   ├── release-and-dev.yml                         # release-please + build-versioned-image + build-deploy-dev
 │   ├── promote.yml                      # qa/prod helm upgrade (manual dispatch)
 │   └── pr-title-lint.yml                # Conventional Commits enforcement
 ├── final-workflows/                     # PRODUCTION-READY files for kenobi-c2s
-│   ├── main.yml                         # full version with ACR logins, tenant image build
+│   ├── release-and-dev.yml                         # full version with ACR logins, tenant image build
 │   ├── promote.yml                      # full helm --set matrix matching today's behaviour
 │   ├── pr-title-lint.yml                # same as POC stub
 │   ├── release-please-config.json       # same as POC
@@ -53,7 +53,7 @@ After the parity work, the proposed kenobi-c2s structure is **3 workflow files**
 
 | File | Trigger | Jobs |
 |------|---------|------|
-| `main.yml` | push to main | `release-please` (always) + `build-versioned-image` (gated on Release-PR merge) + `build-deploy-dev` (parallel, always). Per-job `permissions:` and `concurrency:` blocks preserve least-privilege and per-flow queueing. |
+| `release-and-dev.yml` | push to main | `release-please` (always) + `build-versioned-image` (gated on Release-PR merge) + `build-deploy-dev` (parallel, always). Per-job `permissions:` and `concurrency:` blocks preserve least-privilege and per-flow queueing. |
 | `promote.yml` | manual dispatch | qa/prod helm upgrade with semver-shape, tag-existence, and prerelease-to-prod guards. |
 | `pr-title-lint.yml` | pull_request | Conventional Commits enforcement (must be required status check on `main`). |
 

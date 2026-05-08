@@ -1,4 +1,4 @@
-name: promote
+name: Promote to QA / Production
 
 # Mirrors kenobi-c2s' azure-build-promote.yml. Manual dispatch — pick a
 # tag (must be one release-please cut) and a target environment.

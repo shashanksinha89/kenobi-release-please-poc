@@ -6,7 +6,7 @@ These are the **actual files** that should land in `crowdbotics/kenobi-c2s` to a
 
 | File here | Goes to | Replaces |
 |---|---|---|
-| `main.yml` | `kenobi-c2s/.github/workflows/main.yml` | `azure-build-deploy-dev.yml` + `azure-build-on-tag.yml` |
+| `release-and-dev.yml` | `kenobi-c2s/.github/workflows/release-and-dev.yml` | `azure-build-deploy-dev.yml` + `azure-build-on-tag.yml` |
 | `promote.yml` | `kenobi-c2s/.github/workflows/promote.yml` | `azure-build-promote.yml` |
 | `pr-title-lint.yml` | `kenobi-c2s/.github/workflows/pr-title-lint.yml` | (new — required) |
 | `release-please-config.json` | `kenobi-c2s/release-please-config.json` (repo root) | (new) |
@@ -16,12 +16,12 @@ These are the **actual files** that should land in `crowdbotics/kenobi-c2s` to a
 
 | File | Why |
 |---|---|
-| `.github/workflows/azure-build-deploy-dev.yml` | Folded into `main.yml :: build-and-deploy-dev` job |
-| `.github/workflows/azure-build-on-tag.yml` | Folded into `main.yml :: build-versioned-image` job (gated on Release-PR merge) |
+| `.github/workflows/azure-build-deploy-dev.yml` | Folded into `release-and-dev.yml :: build-and-deploy-dev` job |
+| `.github/workflows/azure-build-on-tag.yml` | Folded into `release-and-dev.yml :: build-versioned-image` job (gated on Release-PR merge) |
 | `.github/workflows/azure-build-promote.yml` | Replaced by `promote.yml` (regex updated for bare semver, `create_release` input dropped) |
 | `.github/workflows/azure-hotfix-ci.yml` | Replaced by `Release-As:` footer (trunk hotfix) or release branch (in-flight RC) |
 
-## Job graph in `main.yml`
+## Job graph in `release-and-dev.yml`
 
 ```
                  push to main
@@ -90,10 +90,10 @@ A safe, reversible cutover:
 
 1. Open one PR that:
    - Adds `release-please-config.json` + `release-please-manifest.json` (seeded at the current released kenobi-c2s version)
-   - Adds the three new workflows (`main.yml`, `promote.yml`, `pr-title-lint.yml`)
+   - Adds the three new workflows (`release-and-dev.yml`, `promote.yml`, `pr-title-lint.yml`)
    - **Does NOT delete the old workflows yet**
 2. After merge, push a `chore:` (or any commit) and verify:
-   - `main.yml` ran with all expected jobs
+   - `release-and-dev.yml` ran with all expected jobs
    - `azure-build-deploy-dev.yml` also ran (still present — duplicate dev deploy is safe)
    - The Release PR opens correctly when a `feat:` lands
 3. Cut one release end-to-end via the Release PR. Verify versioned image + tenant image are built. Verify `promote.yml qa → production` works for the new bare-semver tag.
@@ -114,14 +114,14 @@ tag_pattern = re.compile(r"^v?(\d+\.\d+\.\d+.*)$")
 
 The `v?` is optional — both `v1.2.3` and bare `1.2.3` match, and the captured `group(1)` is always bare. So switching from v-prefixed (current `19.0.2`) to release-please-emitted bare semver (e.g. `1.23.0`) produces an identical `version` field in `build.json`. **No code change to the script is required.**
 
-**2. The build-arg pattern in `main.yml` matches what the script expects.**
+**2. The build-arg pattern in `release-and-dev.yml` matches what the script expects.**
 
 The script resolves the version in this order:
 1. `git describe --tags --exact-match HEAD` (works because `.git/` is in the docker build context — `.dockerignore` deliberately keeps it there)
 2. `GITHUB_REF` env var (set via `ARG GITHUB_REF` in the Dockerfile, fed from build-args in the workflow)
 3. Branch + short SHA fallback (`0.0.0-dev+main.abc1234`)
 
-| Job in `main.yml` | What `GITHUB_REF` is set to | What `build.json::version` ends up as |
+| Job in `release-and-dev.yml` | What `GITHUB_REF` is set to | What `build.json::version` ends up as |
 |---|---|---|
 | `build-versioned-image` | `refs/tags/1.23.0` (release-please tag, prefixed) | `1.23.0` |
 | `build-and-deploy-dev` (sha image) | `refs/heads/main` | `0.0.0-dev+main.abc1234` |
