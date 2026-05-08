@@ -1,0 +1,219 @@
+# Production-ready replacement for kenobi-c2s' azure-build-promote.yml.
+# Manual dispatch only — pick a tag (must be one release-please cut) and
+# a target environment (qa or production).
+#
+# Differences from the original azure-build-promote.yml:
+#   - Tag format is bare semver (1.2.3, 1.2.3-rc.1) — no `v` prefix.
+#     release-please is configured with include-v-in-tag: false. The
+#     regex below reflects that.
+#   - `create_release` input dropped — release-please creates the GitHub
+#     Release at Release-PR-merge time. This workflow only deploys.
+#   - All secret/var wiring is identical to the original — no behaviour
+#     change for the deployed pod.
+
+name: promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Image tag to deploy (bare semver, e.g. 1.2.3 or 1.2.3-rc.1). Must already exist as a git tag.'
+        required: true
+      environment:
+        description: 'Target environment'
+        required: true
+        type: choice
+        options:
+          - qa
+          - production
+      dry_run:
+        description: 'Run helm upgrade with --dry-run only'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+# Per-environment queueing — never cancel a mid-helm-upgrade promotion.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: kenobi-c2s
+  IMAGE_REPO: ${{ secrets.SHARED_ACR_SERVER }}/kenobi-c2s
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    env:
+      RELEASE_NAME: kenobi-c2s
+      NAMESPACE:    ${{ vars.NAMESPACE || 'kenobi-c2s' }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.CI_TOKEN }}
+
+      # Bare semver — release-please emits 1.2.3 / 1.2.3-rc.1 (no `v`).
+      - name: Validate semver shape
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$IMAGE_TAG" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
+            echo "::error::image_tag must be valid bare semver (1.2.3 or 1.2.3-rc.1), got: $IMAGE_TAG"
+            exit 1
+          fi
+          echo "✓ semver shape: $IMAGE_TAG"
+
+      - name: Verify git tag exists
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if ! git rev-parse "refs/tags/$IMAGE_TAG" >/dev/null 2>&1; then
+            echo "::error::Git tag $IMAGE_TAG does not exist on origin. Merge the Release PR first (or push the tag manually for a release-branch hotfix)."
+            exit 1
+          fi
+          echo "✓ tag exists: $IMAGE_TAG"
+
+      - name: Block prerelease promotion to production
+        if: ${{ github.event.inputs.environment == 'production' }}
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$IMAGE_TAG" == *-* ]]; then
+            echo "::error::Refusing to promote prerelease tag $IMAGE_TAG to production. Cut a stable release first."
+            exit 1
+          fi
+          echo "✓ stable tag — prod promotion allowed"
+
+      - name: Login to shared ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ secrets.SHARED_ACR_SERVER }}
+          username: ${{ secrets.SHARED_ACR_USERNAME }}
+          password: ${{ secrets.SHARED_ACR_PASSWORD }}
+
+      - name: Setup crane
+        uses: imjasonh/setup-crane@v0.5
+
+      - name: Resolve image digest
+        id: resolve
+        env:
+          IMAGE_TAG: ${{ github.event.inputs.image_tag }}
+        run: |
+          set -euo pipefail
+          echo "Resolving digest for $IMAGE_REPO:$IMAGE_TAG"
+          DIGEST=$(crane digest "$IMAGE_REPO:$IMAGE_TAG")
+          echo "Resolved: $DIGEST"
+          echo "tag=$IMAGE_TAG"   >> "$GITHUB_OUTPUT"
+          echo "digest=$DIGEST"   >> "$GITHUB_OUTPUT"
+
+      - uses: crowdbotics/github-actions/azure-k8s-auth@master
+        with:
+          AZURE_CREDENTIALS:    ${{ secrets.AZURE_CREDENTIALS }}
+          AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+          AZURE_CLUSTER_NAME:   ${{ vars.AZURE_CLUSTER_NAME }}
+          ACR_LOGIN_SERVER:     ${{ secrets.SHARED_ACR_SERVER }}
+          ACR_USERNAME:         ${{ secrets.SHARED_ACR_USERNAME }}
+          ACR_PASSWORD:         ${{ secrets.SHARED_ACR_PASSWORD }}
+          NAMESPACE:            ${{ env.NAMESPACE }}
+
+      - name: Clone deployment chart repository
+        run: |
+          git clone --single-branch --branch develop --depth 1 \
+            https://${{ secrets.TOKEN }}@github.com/crowdbotics/project-deploy.git deployment
+
+      - name: Helm deploy
+        env:
+          VALUES_FILE: ${{ vars.HELM_VAR_FILE }}
+          IMAGE_TAG:   ${{ steps.resolve.outputs.tag }}
+          DIGEST:      ${{ steps.resolve.outputs.digest }}
+          DRY_RUN:     ${{ github.event.inputs.dry_run }}
+        run: |
+          set -euo pipefail
+          cd deployment/azure/helm-chart/kenobi-c2s/deployment-app
+
+          helm dependency build
+
+          VALUES_ARGS=(-f values.yaml)
+          if [[ -n "$VALUES_FILE" ]]; then
+            VALUES_ARGS+=(-f "$VALUES_FILE")
+          fi
+
+          DRY_RUN_ARGS=()
+          if [[ "$DRY_RUN" == "true" ]]; then
+            DRY_RUN_ARGS+=(--dry-run)
+          fi
+
+          helm upgrade --install "$RELEASE_NAME" . \
+            "${VALUES_ARGS[@]}" \
+            --namespace "$NAMESPACE" \
+            --set image.repository="$IMAGE_REPO" \
+            --set-string image.tag="$IMAGE_TAG@$DIGEST" \
+            --set secrets.SECRET_KEY="${{ secrets.SECRET_KEY }}" \
+            --set secrets.AZURE_OPENAI_API_KEY="${{ secrets.AZURE_OPENAI_API_KEY }}" \
+            --set secrets.AZURE_CONNECTION_STRING="${{ secrets.AZURE_CONNECTION_STRING }}" \
+            --set secrets.DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
+            --set secrets.KENOBI_SERVICE_RABBITMQ_HOST="${{ vars.CLOUDAMQP_URI }}" \
+            --set secrets.KENOBI_SERVICE_RABBITMQ_PORT="5672" \
+            --set secrets.KENOBI_SERVICE_RABBITMQ_USER="${{ secrets.CLOUDAMQP_USER }}" \
+            --set secrets.KENOBI_SERVICE_RABBITMQ_PASSWORD="${{ secrets.CLOUDAMQP_PASSWORD }}" \
+            --set secrets.KENOBI_SERVICE_RABBITMQ_VHOST="${{ secrets.CLOUDAMQP_USER }}" \
+            --set secrets.CLERK_SECRET_KEY="${{ secrets.CLERK_SECRET_KEY }}" \
+            --set secrets.CLERK_WEBHOOK_SECRET="${{ secrets.CLERK_WEBHOOK_SECRET }}" \
+            --set secrets.GITHUB_APP_CLIENT_SECRET="${{ secrets.GH_APP_CLIENT_SECRET }}" \
+            --set secrets.GITHUB_APP_PRIVATE_KEY="${{ secrets.GH_APP_PRIVATE_KEY }}" \
+            --set secrets.GITHUB_WEBHOOK_SECRET="${{ secrets.GH_WEBHOOK_SECRET }}" \
+            --set rabbitmq.auth.username="${{ secrets.CLOUDAMQP_USER }}" \
+            --set rabbitmq.auth.passw="${{ secrets.CLOUDAMQP_PASSWORD }}" \
+            --set rabbitmq.uri="${{ vars.CLOUDAMQP_URI }}" \
+            --set secrets.CLERK_PUBLISHABLE_KEY="${{ vars.CLERK_PUBLISHABLE_KEY }}" \
+            --set secrets.CLERK_FRONTEND_DOMAIN="${{ vars.CLERK_FRONTEND_DOMAIN }}" \
+            --set secrets.QUERY_AGENT_DB_PASSWORD="${{ secrets.QUERY_AGENT_DB_PASSWORD }}" \
+            --set secrets.SLACK_APP_NOTIFICATION_WEBHOOK_URL="${{ secrets.SLACK_APP_NOTIFICATION_WEBHOOK_URL }}" \
+            --set secrets.REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}" \
+            --set secrets.LANGFUSE_PUBLIC_KEY="${{ secrets.LANGFUSE_PUBLIC_KEY }}" \
+            --set secrets.LANGFUSE_SECRET_KEY="${{ secrets.LANGFUSE_SECRET_KEY }}" \
+            --set secrets.STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+            --set secrets.STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}" \
+            --set secrets.STRIPE_PRICE_ID="${{ vars.STRIPE_PRICE_ID }}" \
+            --set secrets.STRIPE_PORTAL_RETURN_URL="${{ vars.STRIPE_PORTAL_RETURN_URL }}" \
+            --set secrets.STRIPE_CHECKOUT_SUCCESS_URL="${{ vars.STRIPE_CHECKOUT_SUCCESS_URL }}" \
+            --set secrets.STRIPE_CHECKOUT_CANCEL_URL="${{ vars.STRIPE_CHECKOUT_CANCEL_URL }}" \
+            --set secrets.INTERNAL_PRO_PLAN_ID="${{ vars.INTERNAL_PRO_PLAN_ID || 'pro' }}" \
+            --set secrets.POSTHOG_API_KEY="${{ secrets.POSTHOG_API_KEY }}" \
+            --set environmentVars.CIU_COST_DOCUMENT_GENERATION="${{ vars.CIU_COST_DOCUMENT_GENERATION }}" \
+            --set environmentVars.CIU_COST_WORKFLOW_CREATION="${{ vars.CIU_COST_WORKFLOW_CREATION }}" \
+            --set environmentVars.CIU_COST_CHAT_MESSAGE="${{ vars.CIU_COST_CHAT_MESSAGE }}" \
+            --set environmentVars.CIU_COST_MCP_MESSAGE="${{ vars.CIU_COST_MCP_MESSAGE }}" \
+            --set environmentVars.CIU_COST_INGESTION_PER_LOC="${{ vars.CIU_COST_INGESTION_PER_LOC }}" \
+            --set environmentVars.CIU_COST_DEFAULT_INGESTION="${{ vars.CIU_COST_DEFAULT_INGESTION }}" \
+            --set environmentVars.USE_DGA_PIPELINE="${{ vars.USE_DGA_PIPELINE || 'false' }}" \
+            --wait \
+            --timeout 20m \
+            "${DRY_RUN_ARGS[@]}"
+
+      - name: Notify Slack
+        if: always()
+        uses: crowdbotics/github-actions/slack-notify@master
+        with:
+          webhook_url: ${{ secrets.ARTIFACT_SLACK_WEBHOOK_URL }}
+          title: "${{ github.event.inputs.environment }} deploy ${{ job.status == 'success' && 'succeeded' || 'failed' }}: ${{ env.IMAGE_NAME }}"
+          status: ${{ job.status }}
+          run_url: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          fields: |
+            Image tag=${{ github.event.inputs.image_tag }}
+            Environment=${{ github.event.inputs.environment }}
+            Digest=${{ steps.resolve.outputs.digest || '(unresolved)' }}
+            Dry run=${{ github.event.inputs.dry_run }}

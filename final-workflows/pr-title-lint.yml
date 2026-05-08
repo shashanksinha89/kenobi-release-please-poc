@@ -1,0 +1,59 @@
+# Enforces Conventional Commits in PR titles. Required because GitHub
+# squash-merge uses the PR title as the commit subject — and release-please
+# parses that subject to decide bump type. One bad PR title produces a
+# wrong (or no) version bump.
+#
+# **Add this workflow as a required status check on `main`** — without it,
+# a PR with a non-conventional title can land and silently break release-please.
+
+name: pr-title-lint
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Allowed Conventional Commit types — must match the
+          # changelog-sections in release-please-config.json.
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+          # Scopes are optional — `feat:` and `feat(api):` both valid.
+          requireScope: false
+          # Subject must start with a capital letter so changelog reads
+          # cleanly ("Add foo", not "add foo").
+          subjectPattern: ^[A-Z].+$
+          subjectPatternError: |
+            The subject "{subject}" found in the PR title "{title}" didn't match the configured pattern.
+            Subject must start with an uppercase letter.
+
+            Examples:
+              feat: Add tenant filter to chat endpoints
+              fix(auth): Reject expired Clerk tokens
+              feat!: Drop /v1/legacy endpoint
+
+            KENOBI-XXXX prefix belongs in the commit body / footer, not the title:
+
+              feat(api): Add tenant filter
+
+              KENOBI-1234
